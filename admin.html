@@ -97,13 +97,22 @@
 <script src="config.js"></script>
 <script>
 (function(){
-  const C = window.RIFA;
   const $ = id => document.getElementById(id);
   const show = (id,on) => $(id).hidden = !on;
+  function falha(txt){
+    $("config-view").hidden=false;
+    $("config-view").querySelector(".card").innerHTML='<h2>Não foi possível iniciar</h2><p></p>';
+    $("config-view").querySelector("p").textContent=txt;
+  }
+  const C = window.RIFA;
+  if(!C) return falha("O arquivo config.js não carregou ou tem um erro de digitação (aspas, vírgula ou chave faltando). Reabra o config.js no GitHub e compare com o original.");
+  if(typeof supabase==="undefined") return falha("A biblioteca do Supabase não carregou. Verifique a internet, desative bloqueadores de anúncio para este site e recarregue a página.");
   const esc = s => String(s??"").replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
 
   if(!C.SUPABASE_URL || C.SUPABASE_URL.includes("COLE_AQUI")){ show("config-view",true); return; }
-  const sb = supabase.createClient(C.SUPABASE_URL, C.SUPABASE_KEY);
+  let sb;
+  try{ sb = supabase.createClient(C.SUPABASE_URL.trim(), C.SUPABASE_KEY.trim()); }
+  catch(e){ return falha("A SUPABASE_URL no config.js é inválida. Ela deve ser só o endereço do projeto, no formato https://xxxxxxxx.supabase.co (sem /rest/v1 no final). Detalhe: "+e.message); }
 
   let vendas = [];          // [{numero, comprador_nome, comprador_contato, vendido_em}]
   let mapa = new Map();     // numero -> venda
@@ -113,9 +122,11 @@
 
   // ---------- Login ----------
   async function iniciar(){
-    const {data:{session}} = await sb.auth.getSession();
-    if(session){ show("login-view",false); show("app-view",true); await carregar(); }
-    else { show("app-view",false); show("login-view",true); }
+    try{
+      const {data:{session}} = await sb.auth.getSession();
+      if(session){ show("login-view",false); show("app-view",true); await carregar(); }
+      else { show("app-view",false); show("login-view",true); }
+    }catch(e){ falha("Erro ao iniciar: "+e.message); }
   }
   $("login-form").addEventListener("submit", async e=>{
     e.preventDefault();
