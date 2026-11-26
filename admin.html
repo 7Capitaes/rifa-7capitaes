@@ -44,6 +44,7 @@
 
   <div class="wrap" style="padding-top:1.6rem;padding-bottom:3rem">
     <div class="stats">
+      <div class="stat" style="background:var(--yellow);border:2px solid var(--navy)"><b id="st-total">R$ 0,00</b><small>total arrecadado</small></div>
       <div class="stat"><b id="st-vend">0</b><small>números vendidos</small></div>
       <div class="stat"><b id="st-disp">0</b><small>números restantes</small></div>
       <div class="stat"><b id="st-lote">1</b><small>lote liberado no site</small></div>
@@ -60,6 +61,9 @@
           <input type="text" id="f-nome" required autocomplete="off">
           <label for="f-contato">Contato (WhatsApp, telefone ou @ do Instagram)</label>
           <input type="text" id="f-contato" required autocomplete="off">
+          <label for="f-valor">Valor recebido nesta venda (R$)</label>
+          <input type="text" id="f-valor" inputmode="decimal" placeholder="Ex.: 12,00" required autocomplete="off">
+          <p class="hint" id="valor-hint">Preenchido sozinho pela tabela de preços (você pode alterar). Se vender vários números juntos, informe o total.</p>
           <p class="msg" id="venda-msg" hidden></p>
           <p style="margin-top:1.1rem"><button class="btn btn-primary" type="submit" id="venda-btn">Salvar venda</button></p>
         </form>
@@ -79,7 +83,7 @@
         </div>
         <div class="tablewrap">
           <table>
-            <thead><tr><th>Nº</th><th>Nome</th><th>Contato</th><th>Data</th><th></th></tr></thead>
+            <thead><tr><th>Nº</th><th>Nome</th><th>Contato</th><th>Valor</th><th>Data</th><th></th></tr></thead>
             <tbody id="tbody"></tbody>
           </table>
         </div>
@@ -117,6 +121,25 @@
   let vendas = [];          // [{numero, comprador_nome, comprador_contato, vendido_em}]
   let mapa = new Map();     // numero -> venda
   let escolhidos = new Set();
+
+  const brl = v => "R$ " + (Number(v||0)).toLocaleString("pt-BR",{minimumFractionDigits:2,maximumFractionDigits:2});
+  const centavos = v => Math.round(Number(v||0)*100);
+  function parseValor(txt){
+    let t=String(txt).replace(/[R$\s]/g,"");
+    if(t.includes(",")) t=t.replace(/\./g,"").replace(",",".");
+    const n=Number(t); return (t!=="" && isFinite(n) && n>=0) ? Math.round(n*100)/100 : null;
+  }
+  function sugestao(q){
+    const g=Math.floor(q/C.PROMO_QTD), r=q%C.PROMO_QTD;
+    return g*C.PROMO_PRECO + r*C.PRECO_UNITARIO;
+  }
+  let valorManual=false;
+  function atualizaSugestao(){
+    const q=escolhidos.size;
+    $("valor-hint").textContent = q ? "Sugestão para "+q+" número"+(q>1?"s":"")+": "+brl(sugestao(q))+" (tabela de preços). Altere se o valor recebido for outro." : "Preenchido sozinho pela tabela de preços (você pode alterar). Se vender vários números juntos, informe o total.";
+    if(!valorManual) $("f-valor").value = q ? sugestao(q).toFixed(2).replace(".",",") : "";
+  }
+  $("f-valor").addEventListener("input", ()=>{ valorManual = $("f-valor").value.trim()!==""; });
 
   function msg(el, texto, tipo){ el.hidden=!texto; el.textContent=texto||""; el.className="msg "+(tipo||""); }
 
@@ -159,6 +182,7 @@
   }
 
   function renderTudo(){
+    $("st-total").textContent=brl(vendas.reduce((t,v)=>t+centavos(v.valor),0)/100);
     $("st-vend").textContent=vendas.length;
     $("st-disp").textContent=C.TOTAL_NUMEROS-vendas.length;
     $("st-lote").textContent=loteAtual();
@@ -176,7 +200,7 @@
     const q=$("busca").value.trim().toLowerCase();
     const lista=vendas.filter(v=>!q || String(v.numero)===q || v.comprador_nome.toLowerCase().includes(q) || v.comprador_contato.toLowerCase().includes(q));
     $("tbody").innerHTML=lista.map(v=>
-      '<tr><td><b>'+v.numero+'</b></td><td>'+esc(v.comprador_nome)+'</td><td>'+esc(v.comprador_contato)+'</td><td>'+
+      '<tr><td><b>'+v.numero+'</b></td><td>'+esc(v.comprador_nome)+'</td><td>'+esc(v.comprador_contato)+'</td><td>'+brl(v.valor)+'</td><td>'+
       new Date(v.vendido_em).toLocaleDateString("pt-BR")+'</td><td class="actions">'+
       '<button class="btn btn-small" data-ed="'+v.numero+'">Editar</button>'+
       '<button class="btn btn-small btn-danger" data-del="'+v.numero+'">Desfazer</button></td></tr>').join("");
@@ -199,11 +223,12 @@
   $("agrid").addEventListener("click", e=>{
     const n=+e.target.dataset?.n; if(!n || mapa.has(n)) return;
     escolhidos.has(n)?escolhidos.delete(n):escolhidos.add(n);
-    e.target.classList.toggle("pick"); sincronizaCampo();
+    e.target.classList.toggle("pick"); sincronizaCampo(); atualizaSugestao();
   });
   $("f-nums").addEventListener("input", ()=>{
     try{ escolhidos=new Set(parseNums($("f-nums").value).filter(n=>!mapa.has(n))); }catch(_){}
     document.querySelectorAll("#agrid .num").forEach(el=>el.classList.toggle("pick", escolhidos.has(+el.dataset.n)));
+    atualizaSugestao();
   });
 
   // ---------- Registrar venda ----------
@@ -219,17 +244,22 @@
     if(ja.length) return msg(out,"Já vendidos: "+ja.join(", ")+". Remova-os da lista.","err");
     const nome=$("f-nome").value.trim(), contato=$("f-contato").value.trim();
     if(!nome||!contato) return msg(out,"Preencha nome e contato.","err");
+    const valor=parseValor($("f-valor").value);
+    if(valor===null) return msg(out,"Informe o valor recebido (ex.: 12,00). Se for cortesia, use 0.","err");
+    // divide o total da venda entre os números, sem perder centavos
+    const totalC=Math.round(valor*100), base=Math.floor(totalC/nums.length), resto=totalC-base*nums.length;
 
     $("venda-btn").disabled=true;
-    const {error}=await sb.from("numeros").insert(nums.map(n=>({numero:n,comprador_nome:nome,comprador_contato:contato})));
+    const {error}=await sb.from("numeros").insert(nums.map((n,i)=>({numero:n,comprador_nome:nome,comprador_contato:contato,valor:(base+(i<resto?1:0))/100})));
     $("venda-btn").disabled=false;
     if(error){
       if(error.code==="23505"){ await carregar(); return msg(out,"Algum desses números acabou de ser vendido. A lista foi atualizada, confira e tente de novo.","err"); }
+      if(/valor/i.test(error.message)) return msg(out,"O banco ainda não tem a coluna de valor. Rode o arquivo atualizacao-valor.sql no SQL Editor do Supabase.","err");
       return msg(out,"Erro ao salvar: "+error.message,"err");
     }
-    escolhidos.clear(); $("venda-form").reset();
+    escolhidos.clear(); $("venda-form").reset(); valorManual=false; atualizaSugestao();
     await carregar();
-    msg(out,"Venda salva: "+nums.join(", ")+".","ok");
+    msg(out,"Venda salva: "+nums.join(", ")+" ("+brl(valor)+").","ok");
   });
 
   // ---------- Editar / desfazer ----------
@@ -240,7 +270,9 @@
       const nome=prompt("Nome do comprador (número "+ed+"):", v.comprador_nome); if(nome===null) return;
       const contato=prompt("Contato (número "+ed+"):", v.comprador_contato); if(contato===null) return;
       if(!nome.trim()||!contato.trim()) return alert("Nome e contato não podem ficar vazios.");
-      const {error}=await sb.from("numeros").update({comprador_nome:nome.trim(),comprador_contato:contato.trim()}).eq("numero",+ed);
+      const vtxt=prompt("Valor recebido por este número (R$):", Number(v.valor||0).toFixed(2).replace(".",",")); if(vtxt===null) return;
+      const vnovo=parseValor(vtxt); if(vnovo===null) return alert("Valor inválido. Use o formato 4,00.");
+      const {error}=await sb.from("numeros").update({comprador_nome:nome.trim(),comprador_contato:contato.trim(),valor:vnovo}).eq("numero",+ed);
       if(error) return alert("Erro: "+error.message);
       carregar();
     }
@@ -257,8 +289,8 @@
   $("csv").addEventListener("click", ()=>{
     if(!vendas.length) return alert("Ainda não há números vendidos.");
     const cel=t=>{ t=String(t??""); if(/^[=+\-@]/.test(t)) t="'"+t; return '"'+t.replace(/"/g,'""')+'"'; };
-    const linhas=[["numero","nome","contato","data_venda"].join(";")];
-    vendas.forEach(v=>linhas.push([v.numero,cel(v.comprador_nome),cel(v.comprador_contato),new Date(v.vendido_em).toLocaleString("pt-BR")].join(";")));
+    const linhas=[["numero","nome","contato","valor","data_venda"].join(";")];
+    vendas.forEach(v=>linhas.push([v.numero,cel(v.comprador_nome),cel(v.comprador_contato),Number(v.valor||0).toFixed(2).replace(".",","),new Date(v.vendido_em).toLocaleString("pt-BR")].join(";")));
     const blob=new Blob(["\uFEFF"+linhas.join("\r\n")],{type:"text/csv;charset=utf-8"});
     const a=document.createElement("a"); a.href=URL.createObjectURL(blob);
     a.download="rifa-7capitaes-vendidos-"+new Date().toISOString().slice(0,10)+".csv";
