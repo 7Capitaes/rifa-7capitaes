@@ -4,7 +4,7 @@
    ============================================================ */
 window.RIFA = {
   // --- Supabase (veja o LEIA-ME.md, passo 4) ---
-  SUPABASE_URL: "SUPABASE_URL=https://ympbuupomyfsifzbkfpt.supabase.co",
+  SUPABASE_URL: "https://ympbuupomyfsifzbkfpt.supabase.co",
   SUPABASE_KEY: "sb_publishable_5lGmD677oj9uYwsdj-MIXQ_RJk27-L0",
 
   // --- Instagram (onde as vendas acontecem) ---
