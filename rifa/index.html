@@ -1,0 +1,178 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Rifa de Verão | Equipe 7 Capitães</title>
+<meta name="description" content="Consulte os números disponíveis da Rifa de Verão da Equipe 7 Capitães (IFFluminense Campos Centro) e compre pelo Instagram.">
+<link rel="icon" type="image/png" href="favicon.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@600;700;800&family=Nunito+Sans:wght@400;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<div id="demo" class="demo-flag" hidden>Modo demonstração: os números abaixo são de exemplo. Configure o Supabase no arquivo config.js.</div>
+
+<header class="hero">
+  <div class="wrap">
+    <div>
+      <h1>Rifa de Verão <span>Equipe 7 Capitães</span></h1>
+      <p class="lead">Veja quais números ainda estão disponíveis e garanta o seu pelo Instagram da equipe.</p>
+      <div class="hero-actions">
+        <a class="btn btn-primary" id="ig-hero" href="#" target="_blank" rel="noopener"></a>
+        <a class="btn" href="#numeros">Ver números disponíveis</a>
+      </div>
+      <div class="price-chip" id="price-chip"></div>
+    </div>
+    <img class="hero-logo" src="logo.png" alt="Logo da Equipe 7 Capitães, IFFluminense Campos Centro: farol, sol e ondas dentro de um círculo">
+  </div>
+  <svg class="waves" viewBox="0 0 1200 46" preserveAspectRatio="none" aria-hidden="true"><path fill="currentColor" d="M0 24c100 0 100-18 200-18s100 18 200 18 100-18 200-18 100 18 200 18 100-18 200-18 100 18 200 18v22H0z"/></svg>
+</header>
+
+<main>
+  <section id="numeros">
+    <div class="wrap">
+      <div class="board-head">
+        <div>
+          <h2>Números disponíveis</h2>
+          <p class="sub" id="lote-titulo">Carregando…</p>
+        </div>
+        <div class="progress" id="progress" hidden>
+          <div class="bar"><i id="bar"></i></div>
+          <small id="progress-txt"></small>
+        </div>
+      </div>
+      <div class="legend" id="legend" hidden>
+        <span><i class="dot free"></i> Disponível</span>
+        <span><i class="dot sold"></i> Já vendido</span>
+      </div>
+      <div id="board" aria-live="polite"></div>
+      <div class="notice" id="notice" hidden>
+        <b>Os próximos números ainda não aparecem.</b> Eles só são liberados depois que todos os números do lote atual forem vendidos, de 100 em 100. Quando isso acontecer, este quadro mostra os 100 seguintes automaticamente.
+      </div>
+      <div class="cta-bar">
+        <a class="btn btn-primary" id="ig-board" href="#" target="_blank" rel="noopener"></a>
+        <span class="sub">Escolheu seus números? Chame a equipe no Instagram e informe quais quer.</span>
+      </div>
+    </div>
+  </section>
+
+  <section class="tint" id="premios">
+    <div class="wrap">
+      <h2>Prêmios</h2>
+      <div class="prizes" id="prizes"></div>
+    </div>
+  </section>
+
+  <section id="info">
+    <div class="wrap">
+      <h2>Informações da rifa</h2>
+      <div class="info-list" id="info-list"></div>
+      <ul class="extras" id="extras"></ul>
+      <h3 style="margin-top:2.2rem">Como participar</h3>
+      <ol class="steps">
+        <li><span>Escolha os números disponíveis no quadro acima.</span></li>
+        <li><span>Envie uma mensagem para o Instagram da equipe dizendo quais números você quer.</span></li>
+        <li><span>Combine o pagamento com a equipe. Seu número só é seu depois que a equipe confirmar a venda.</span></li>
+      </ol>
+    </div>
+  </section>
+</main>
+
+<footer>
+  <div class="wrap">
+    <p><b>Equipe 7 Capitães</b> · IFFluminense Campos Centro</p>
+    <p>As vendas são feitas apenas pelo Instagram <a id="ig-foot" href="#" target="_blank" rel="noopener"></a></p>
+  </div>
+</footer>
+
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.118.0/dist/umd/supabase.js"></script>
+<script src="config.js"></script>
+<script>
+(function(){
+  const C = window.RIFA;
+  const $ = id => document.getElementById(id);
+  const brl = v => "R$ " + Number(v).toLocaleString("pt-BR",{minimumFractionDigits:Number.isInteger(v)?0:2});
+  const IG_ICON = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="3" width="18" height="18" rx="5"/><circle cx="12" cy="12" r="4"/><circle cx="17.5" cy="6.5" r="1" fill="currentColor"/></svg>';
+  const demo = !C.SUPABASE_URL || C.SUPABASE_URL.includes("COLE_AQUI");
+
+  // Links do Instagram
+  ["ig-hero","ig-board"].forEach(id=>{ const a=$(id); a.href=C.INSTAGRAM_URL; a.innerHTML=IG_ICON+"Comprar pelo Instagram"; });
+  const f=$("ig-foot"); f.href=C.INSTAGRAM_URL; f.textContent=C.INSTAGRAM_USUARIO;
+
+  // Valores
+  $("price-chip").innerHTML =
+    '<div><b>'+brl(C.PRECO_UNITARIO)+'</b><small>cada número</small></div>'+
+    '<div class="promo"><b>'+C.PROMO_QTD+' por '+brl(C.PROMO_PRECO)+'</b><small>promoção</small></div>';
+
+  // Prêmios
+  $("prizes").innerHTML = C.PREMIOS.map(p=>'<div class="prize"><h3></h3><p></p></div>').join("");
+  [...$("prizes").children].forEach((el,i)=>{ el.querySelector("h3").textContent=C.PREMIOS[i].titulo; el.querySelector("p").textContent=C.PREMIOS[i].descricao; });
+
+  // Informações
+  const vazio='<span class="vazio">A definir</span>';
+  const esc = s => String(s).replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
+  $("info-list").innerHTML =
+    '<div class="info-card"><h3>Data do sorteio</h3><p>'+(C.DATA_SORTEIO?esc(C.DATA_SORTEIO):vazio)+'</p></div>'+
+    '<div class="info-card"><h3>Período de vendas</h3><p>'+(C.PERIODO_VENDAS?esc(C.PERIODO_VENDAS):vazio)+'</p></div>'+
+    '<div class="info-card"><h3>Valores</h3><p>'+brl(C.PRECO_UNITARIO)+' por número.<br>Promoção: '+C.PROMO_QTD+' números por '+brl(C.PROMO_PRECO)+'.</p></div>';
+  $("extras").innerHTML = (C.INFO_EXTRA||[]).map(t=>'<li>'+esc(t)+'</li>').join("");
+
+  // Quadro
+  let vendidos = new Set();
+
+  function render(){
+    const L = C.TAMANHO_LOTE, T = C.TOTAL_NUMEROS, nLotes = Math.ceil(T/L);
+    let lote = -1;
+    for(let b=0;b<nLotes;b++){
+      const ini=b*L+1, fim=Math.min((b+1)*L,T);
+      let todos=true; for(let n=ini;n<=fim;n++){ if(!vendidos.has(n)){todos=false;break;} }
+      if(!todos){ lote=b; break; }
+    }
+    const board=$("board");
+    if(lote===-1){
+      $("lote-titulo").textContent="Todos os números foram vendidos.";
+      board.innerHTML='<div class="status-msg"><h3>Rifa esgotada</h3><p>Acompanhe o sorteio pelo Instagram da equipe.</p></div>';
+      ["progress","legend","notice"].forEach(i=>$(i).hidden=true);
+      return;
+    }
+    const ini=lote*L+1, fim=Math.min((lote+1)*L,T);
+    let html='', vend=0;
+    for(let n=ini;n<=fim;n++){
+      const s=vendidos.has(n); if(s) vend++;
+      html+='<div class="num '+(s?'sold':'free')+'" role="img" aria-label="Número '+n+(s?', vendido':', disponível')+'">'+n+'</div>';
+    }
+    board.innerHTML='<div class="grid">'+html+'</div>';
+    const total=fim-ini+1;
+    $("lote-titulo").textContent="Lote "+(lote+1)+": números "+ini+" a "+fim;
+    $("bar").style.width=(vend/total*100)+"%";
+    $("progress-txt").textContent=vend+" vendidos, "+(total-vend)+" disponíveis neste lote";
+    $("progress").hidden=false; $("legend").hidden=false;
+    $("notice").hidden = (lote>=nLotes-1);
+  }
+
+  async function carregar(){
+    if(demo){
+      $("demo").hidden=false;
+      vendidos=new Set([1,2,3,5,8,13,21,34,55,89,7,9,10,11,40,41,42,77,78]);
+      return render();
+    }
+    try{
+      if(!window.sb) window.sb = supabase.createClient(C.SUPABASE_URL, C.SUPABASE_KEY);
+      const {data,error} = await window.sb.rpc("numeros_vendidos");
+      if(error) throw error;
+      vendidos=new Set(data.map(Number));
+      render();
+    }catch(e){
+      console.error(e);
+      if(!vendidos.size) $("board").innerHTML='<div class="status-msg"><h3>Não foi possível carregar os números</h3><p>Atualize a página em instantes ou consulte o Instagram da equipe.</p></div>';
+    }
+  }
+  carregar();
+  setInterval(carregar, 60000);
+  document.addEventListener("visibilitychange",()=>{ if(!document.hidden) carregar(); });
+})();
+</script>
+</body>
+</html>

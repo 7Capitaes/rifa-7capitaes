@@ -1,0 +1,262 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex, nofollow">
+<title>Admin | Rifa de Verão 7 Capitães</title>
+<link rel="icon" type="image/png" href="favicon.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@600;700;800&family=Nunito+Sans:wght@400;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<!-- LOGIN -->
+<div id="login-view" hidden>
+  <div class="wrap">
+    <form class="card login" id="login-form">
+      <img src="logo.png" alt="Equipe 7 Capitães" style="width:150px;display:block;margin:0 auto 1rem">
+      <h2 style="text-align:center;font-size:1.5rem">Área do administrador</h2>
+      <label for="email">E-mail</label>
+      <input type="email" id="email" autocomplete="username" required>
+      <label for="senha">Senha</label>
+      <input type="password" id="senha" autocomplete="current-password" required>
+      <p class="msg err" id="login-err" hidden></p>
+      <p style="margin-top:1.2rem"><button class="btn btn-primary" type="submit" style="width:100%;justify-content:center">Entrar</button></p>
+      <p class="hint" style="text-align:center"><a href="index.html">Voltar ao site</a></p>
+    </form>
+  </div>
+</div>
+
+<!-- PAINEL -->
+<div id="app-view" hidden>
+  <div class="admin-top">
+    <div class="wrap">
+      <div style="display:flex;align-items:center;gap:.8rem"><img src="logo.png" alt=""><h1>Rifa de Verão: Admin</h1></div>
+      <div style="display:flex;gap:.6rem;flex-wrap:wrap">
+        <a class="btn btn-small" href="index.html" target="_blank">Ver site</a>
+        <button class="btn btn-small" id="logout">Sair</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="wrap" style="padding-top:1.6rem;padding-bottom:3rem">
+    <div class="stats">
+      <div class="stat"><b id="st-vend">0</b><small>números vendidos</small></div>
+      <div class="stat"><b id="st-disp">0</b><small>números restantes</small></div>
+      <div class="stat"><b id="st-lote">1</b><small>lote liberado no site</small></div>
+    </div>
+
+    <div class="two">
+      <div>
+        <form class="card" id="venda-form">
+          <h2 style="font-size:1.3rem">Registrar venda</h2>
+          <label for="f-nums">Números vendidos</label>
+          <input type="text" id="f-nums" placeholder="Ex.: 12, 15, 20-23" autocomplete="off">
+          <p class="hint">Separe por vírgula. Use hífen para sequências (20-23). Você também pode tocar nos números do quadro abaixo.</p>
+          <label for="f-nome">Nome do comprador</label>
+          <input type="text" id="f-nome" required autocomplete="off">
+          <label for="f-contato">Contato (WhatsApp, telefone ou @ do Instagram)</label>
+          <input type="text" id="f-contato" required autocomplete="off">
+          <p class="msg" id="venda-msg" hidden></p>
+          <p style="margin-top:1.1rem"><button class="btn btn-primary" type="submit" id="venda-btn">Salvar venda</button></p>
+        </form>
+
+        <div class="card">
+          <h3 style="margin-bottom:.6rem">Quadro de números</h3>
+          <div class="legend"><span><i class="dot free"></i> Livre</span><span><i class="dot sold"></i> Vendido</span><span><i class="dot" style="background:var(--yellow);border:2.5px solid var(--navy)"></i> Selecionado</span></div>
+          <div class="agrid" id="agrid"></div>
+        </div>
+      </div>
+
+      <div class="card">
+        <h2 style="font-size:1.3rem">Números vendidos</h2>
+        <div class="toolbar">
+          <input type="search" id="busca" placeholder="Buscar por número, nome ou contato" aria-label="Buscar">
+          <button class="btn btn-small" id="csv">Exportar CSV</button>
+        </div>
+        <div class="tablewrap">
+          <table>
+            <thead><tr><th>Nº</th><th>Nome</th><th>Contato</th><th>Data</th><th></th></tr></thead>
+            <tbody id="tbody"></tbody>
+          </table>
+        </div>
+        <p class="vazio" id="vazio" hidden>Nenhuma venda registrada ainda.</p>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div id="config-view" class="wrap" hidden>
+  <div class="card login"><h2>Configuração pendente</h2><p>Preencha <b>SUPABASE_URL</b> e <b>SUPABASE_KEY</b> no arquivo <b>config.js</b> (veja o passo 4 do LEIA-ME.md) para usar a área do administrador.</p></div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.118.0/dist/umd/supabase.js"></script>
+<script src="config.js"></script>
+<script>
+(function(){
+  const C = window.RIFA;
+  const $ = id => document.getElementById(id);
+  const show = (id,on) => $(id).hidden = !on;
+  const esc = s => String(s??"").replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
+
+  if(!C.SUPABASE_URL || C.SUPABASE_URL.includes("COLE_AQUI")){ show("config-view",true); return; }
+  const sb = supabase.createClient(C.SUPABASE_URL, C.SUPABASE_KEY);
+
+  let vendas = [];          // [{numero, comprador_nome, comprador_contato, vendido_em}]
+  let mapa = new Map();     // numero -> venda
+  let escolhidos = new Set();
+
+  function msg(el, texto, tipo){ el.hidden=!texto; el.textContent=texto||""; el.className="msg "+(tipo||""); }
+
+  // ---------- Login ----------
+  async function iniciar(){
+    const {data:{session}} = await sb.auth.getSession();
+    if(session){ show("login-view",false); show("app-view",true); await carregar(); }
+    else { show("app-view",false); show("login-view",true); }
+  }
+  $("login-form").addEventListener("submit", async e=>{
+    e.preventDefault();
+    const {error} = await sb.auth.signInWithPassword({email:$("email").value.trim(), password:$("senha").value});
+    if(error){ msg($("login-err"),"E-mail ou senha incorretos.","err"); return; }
+    $("senha").value=""; msg($("login-err"),"");
+    iniciar();
+  });
+  $("logout").addEventListener("click", async ()=>{ await sb.auth.signOut(); iniciar(); });
+
+  // ---------- Dados ----------
+  async function carregar(){
+    let todas=[], de=0, passo=1000;
+    while(true){
+      const {data,error} = await sb.from("numeros").select("*").order("numero").range(de,de+passo-1);
+      if(error){ alert("Erro ao carregar: "+error.message); return; }
+      todas=todas.concat(data); if(data.length<passo) break; de+=passo;
+    }
+    vendas=todas; mapa=new Map(vendas.map(v=>[v.numero,v]));
+    renderTudo();
+  }
+
+  function loteAtual(){
+    const L=C.TAMANHO_LOTE, T=C.TOTAL_NUMEROS, n=Math.ceil(T/L);
+    for(let b=0;b<n;b++){
+      const ini=b*L+1, fim=Math.min((b+1)*L,T);
+      for(let i=ini;i<=fim;i++) if(!mapa.has(i)) return b+1;
+    }
+    return n;
+  }
+
+  function renderTudo(){
+    $("st-vend").textContent=vendas.length;
+    $("st-disp").textContent=C.TOTAL_NUMEROS-vendas.length;
+    $("st-lote").textContent=loteAtual();
+    // quadro
+    let g="";
+    for(let n=1;n<=C.TOTAL_NUMEROS;n++){
+      const s=mapa.has(n), p=escolhidos.has(n);
+      g+='<div class="num '+(s?'sold':'free')+(p?' pick':'')+'" data-n="'+n+'" title="'+(s?esc(mapa.get(n).comprador_nome):'Livre')+'">'+n+'</div>';
+    }
+    $("agrid").innerHTML=g;
+    renderTabela();
+  }
+
+  function renderTabela(){
+    const q=$("busca").value.trim().toLowerCase();
+    const lista=vendas.filter(v=>!q || String(v.numero)===q || v.comprador_nome.toLowerCase().includes(q) || v.comprador_contato.toLowerCase().includes(q));
+    $("tbody").innerHTML=lista.map(v=>
+      '<tr><td><b>'+v.numero+'</b></td><td>'+esc(v.comprador_nome)+'</td><td>'+esc(v.comprador_contato)+'</td><td>'+
+      new Date(v.vendido_em).toLocaleDateString("pt-BR")+'</td><td class="actions">'+
+      '<button class="btn btn-small" data-ed="'+v.numero+'">Editar</button>'+
+      '<button class="btn btn-small btn-danger" data-del="'+v.numero+'">Desfazer</button></td></tr>').join("");
+    $("vazio").hidden = lista.length>0;
+  }
+  $("busca").addEventListener("input", renderTabela);
+
+  // ---------- Seleção de números ----------
+  function parseNums(txt){
+    const out=new Set();
+    for(const parte of txt.split(/[,;\s]+/).filter(Boolean)){
+      const m=parte.match(/^(\d+)-(\d+)$/);
+      if(m){ let a=+m[1], b=+m[2]; if(a>b)[a,b]=[b,a]; for(let i=a;i<=b;i++) out.add(i); }
+      else if(/^\d+$/.test(parte)) out.add(+parte);
+      else throw new Error('Não entendi "'+parte+'". Use números separados por vírgula.');
+    }
+    return [...out].sort((a,b)=>a-b);
+  }
+  function sincronizaCampo(){ $("f-nums").value=[...escolhidos].sort((a,b)=>a-b).join(", "); }
+  $("agrid").addEventListener("click", e=>{
+    const n=+e.target.dataset?.n; if(!n || mapa.has(n)) return;
+    escolhidos.has(n)?escolhidos.delete(n):escolhidos.add(n);
+    e.target.classList.toggle("pick"); sincronizaCampo();
+  });
+  $("f-nums").addEventListener("input", ()=>{
+    try{ escolhidos=new Set(parseNums($("f-nums").value).filter(n=>!mapa.has(n))); }catch(_){}
+    document.querySelectorAll("#agrid .num").forEach(el=>el.classList.toggle("pick", escolhidos.has(+el.dataset.n)));
+  });
+
+  // ---------- Registrar venda ----------
+  $("venda-form").addEventListener("submit", async e=>{
+    e.preventDefault();
+    const out=$("venda-msg"); msg(out,"");
+    let nums;
+    try{ nums=parseNums($("f-nums").value); }catch(err){ return msg(out,err.message,"err"); }
+    if(!nums.length) return msg(out,"Informe ao menos um número.","err");
+    const fora=nums.filter(n=>n<1||n>C.TOTAL_NUMEROS);
+    if(fora.length) return msg(out,"Fora do intervalo 1 a "+C.TOTAL_NUMEROS+": "+fora.join(", "),"err");
+    const ja=nums.filter(n=>mapa.has(n));
+    if(ja.length) return msg(out,"Já vendidos: "+ja.join(", ")+". Remova-os da lista.","err");
+    const nome=$("f-nome").value.trim(), contato=$("f-contato").value.trim();
+    if(!nome||!contato) return msg(out,"Preencha nome e contato.","err");
+
+    $("venda-btn").disabled=true;
+    const {error}=await sb.from("numeros").insert(nums.map(n=>({numero:n,comprador_nome:nome,comprador_contato:contato})));
+    $("venda-btn").disabled=false;
+    if(error){
+      if(error.code==="23505"){ await carregar(); return msg(out,"Algum desses números acabou de ser vendido. A lista foi atualizada, confira e tente de novo.","err"); }
+      return msg(out,"Erro ao salvar: "+error.message,"err");
+    }
+    escolhidos.clear(); $("venda-form").reset();
+    await carregar();
+    msg(out,"Venda salva: "+nums.join(", ")+".","ok");
+  });
+
+  // ---------- Editar / desfazer ----------
+  $("tbody").addEventListener("click", async e=>{
+    const ed=e.target.dataset?.ed, del=e.target.dataset?.del;
+    if(ed){
+      const v=mapa.get(+ed);
+      const nome=prompt("Nome do comprador (número "+ed+"):", v.comprador_nome); if(nome===null) return;
+      const contato=prompt("Contato (número "+ed+"):", v.comprador_contato); if(contato===null) return;
+      if(!nome.trim()||!contato.trim()) return alert("Nome e contato não podem ficar vazios.");
+      const {error}=await sb.from("numeros").update({comprador_nome:nome.trim(),comprador_contato:contato.trim()}).eq("numero",+ed);
+      if(error) return alert("Erro: "+error.message);
+      carregar();
+    }
+    if(del){
+      const v=mapa.get(+del);
+      if(!confirm("Desfazer a venda do número "+del+" ("+v.comprador_nome+")? Ele voltará a ficar disponível no site.")) return;
+      const {error}=await sb.from("numeros").delete().eq("numero",+del);
+      if(error) return alert("Erro: "+error.message);
+      carregar();
+    }
+  });
+
+  // ---------- Exportar CSV ----------
+  $("csv").addEventListener("click", ()=>{
+    if(!vendas.length) return alert("Ainda não há números vendidos.");
+    const cel=t=>{ t=String(t??""); if(/^[=+\-@]/.test(t)) t="'"+t; return '"'+t.replace(/"/g,'""')+'"'; };
+    const linhas=[["numero","nome","contato","data_venda"].join(";")];
+    vendas.forEach(v=>linhas.push([v.numero,cel(v.comprador_nome),cel(v.comprador_contato),new Date(v.vendido_em).toLocaleString("pt-BR")].join(";")));
+    const blob=new Blob(["\uFEFF"+linhas.join("\r\n")],{type:"text/csv;charset=utf-8"});
+    const a=document.createElement("a"); a.href=URL.createObjectURL(blob);
+    a.download="rifa-7capitaes-vendidos-"+new Date().toISOString().slice(0,10)+".csv";
+    document.body.appendChild(a); a.click(); a.remove(); setTimeout(()=>URL.revokeObjectURL(a.href),1000);
+  });
+
+  sb.auth.onAuthStateChange((ev)=>{ if(ev==="SIGNED_OUT") iniciar(); });
+  iniciar();
+})();
+</script>
+</body>
+</html>
